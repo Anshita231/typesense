@@ -36,6 +36,32 @@
             border-radius:10px;
             box-shadow:0 2px 5px rgba(0,0,0,0.1);
         }
+        .vrc-tag{
+            background:#16a34a;
+            color:white;
+            padding:4px 10px;
+            border-radius:20px;
+            font-size:12px;
+            font-weight:bold;
+        }
+
+        details{
+            margin-top:12px;
+        }
+
+        details summary{
+            padding:8px;
+            background:#f3f4f6;
+            border-radius:6px;
+        }
+
+        table{
+            font-size:14px;
+        }
+
+        th{
+            background:#f9fafb;
+        }
     </style>
 </head>
 
@@ -81,20 +107,81 @@
 
             data.forEach(product => {
 
+                let vendorsHtml = "";
+
+                const vrcVendor =
+                    product.vendors &&
+                    product.vendors.find(
+                        v => String(v.VRC || "").trim().toUpperCase() === "VRC"
+                    );
+
+                if(vrcVendor){
+
+                    vendorsHtml = `
+                        <div style="
+                            margin-top:12px;
+                            padding:10px;
+                            background:#f0fdf4;
+                            border-left:4px solid #16a34a;
+                            border-radius:6px;
+                            font-size:14px;
+                        ">
+                            <b>Vendor:</b> ${vrcVendor.companyName || "-"}
+                            &nbsp; | &nbsp;
+                            <b>List Price:</b> ${vrcVendor.vrcListPrice ?? "-"}
+                            &nbsp; | &nbsp;
+                            <b>Discount:</b> ${vrcVendor.discount ?? "-"}
+                            &nbsp; | &nbsp;
+                            <b>Contract Price:</b> ${vrcVendor.contractPrice ?? "-"}
+                            <br><br>
+                            <b>Geo Map Type:</b> ${vrcVendor.geoMapType ?? "-"}
+                            &nbsp; | &nbsp;
+                            <b>Lead Time:</b> ${vrcVendor.leadTime ?? "-"}
+                            &nbsp; | &nbsp;
+                            <b>State:</b> ${vrcVendor.stateName ?? "-"}
+                        </div>
+                    `;
+                }
+
+                const hasVRC =
+                    product.vendors &&
+                    product.vendors.some(
+                        v => String(v.VRC || "").trim().toUpperCase() === "VRC"
+                    );
+
                 resultsDiv.innerHTML += `
                     <div class="card">
-                        <h3>${product.productName}</h3>
+
+                        <div style="
+                            display:flex;
+                            justify-content:space-between;
+                            align-items:center;
+                        ">
+                            <h3 style="margin:0;">
+                                ${product.productName}
+                            </h3>
+
+                            ${
+                                hasVRC
+                                ? '<span class="vrc-tag">VRC</span>'
+                                : ''
+                            }
+                        </div>
+
                         <p><b>Material ID:</b> ${product.MaterialId}</p>
                         <p><b>Brand:</b> ${product.brandName}</p>
-                        <p><b>Variant Name:</b> ${product.variantName}</p>
+                        <p><b>Variant Name:</b> ${product.variantName || "-"}</p>
                         <p><b>Specification:</b> ${product.productSpecification}</p>
-                        <p><b>Price:</b> ${product.listPrice}</p>
+                        <p><b>List Price:</b> ${product.listPrice || "-"}</p>
+
+                        ${vendorsHtml}
+
                     </div>
                 `;
             });
+        }, 100);
+});
 
-        }, 100);   // wait 300ms after typing stops
-    });
 
 </script>
 

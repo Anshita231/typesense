@@ -46,15 +46,13 @@ KNOWN_ATTRIBUTES = {
     str(x).strip().lower()
     for x in attributes_df.iloc[:, 0].dropna()
 }
-print(f"Loaded {len(KNOWN_BRANDS)} brands")
-print(f"Loaded {len(KNOWN_ATTRIBUTES)} attributes")
+# print(f"Loaded {len(KNOWN_BRANDS)} brands")
+# print(f"Loaded {len(KNOWN_ATTRIBUTES)} attributes")
 
 def parse_query(query):
 
     query_lower = query.lower()
-
     model_number = None
-
     match = re.search(
         r'\b(?:model\s*no\.?|model\s*number|model#)\s*([a-z0-9\-\/]+)',
         query_lower,
@@ -63,7 +61,6 @@ def parse_query(query):
 
     if match:
         model_number = match.group(1).lower()
-
         query_lower = query_lower.replace(
             match.group(0),
             " "
@@ -76,16 +73,12 @@ def parse_query(query):
     remaining = []
 
     for word in words:
-
         if word in KNOWN_BRANDS:
             brand = word
-
         elif word in KNOWN_ATTRIBUTES:
             attributes.append(word)
-
         else:
             remaining.append(word)
-
     return {
         "model_number": model_number,
         "brand": brand,
@@ -130,8 +123,13 @@ def search():
         results = client.collections['product'].documents.search({
             'q': model_number,
             'query_by': 'productSpecification',
-            'per_page': 5,
-            'sort_by': '_text_match:desc'
+            'per_page': 20,
+            'sort_by': '_text_match:desc',
+            'include_fields':
+                'materialId,productName,brandName,variantName,'
+                'productSpecification,listPrice,vendors,vendors.companyName,'
+                'vendors.contractPrice,vendors.vrcListPrice,'
+                'vendors.leadTime,vendors.VRC'
         })
 
         output = []
@@ -145,8 +143,17 @@ def search():
                 'brandName': doc.get('brandName', ''),
                 'MaterialId': doc.get('materialId', ''),
                 'productSpecification': doc.get('productSpecification', ''),
-                'listPrice': doc.get('listPrice', '')
+                'listPrice': doc.get('listPrice', ''),
+                'vendors': doc.get('vendors', [])
             })
+        output.sort(
+            key=lambda x: (
+                0 if any(
+                    str(v.get("VRC", "")).strip().upper() == "VRC"
+                    for v in x.get("vendors", [])
+                ) else 1
+            )
+        )
 
         if output:
             return jsonify(output)
@@ -162,9 +169,14 @@ def search():
             'q': q,
             'query_by': 'productName, variantName, productSpecification',
             'query_by_weights': '3,2,1',
-            'per_page': 7,
+            'per_page': 20,
             'prioritize_num_matching_fields': True,
             'sort_by': '_text_match:desc',
+            'include_fields':
+                'materialId,productName,brandName,variantName,'
+                'productSpecification,listPrice,vendors,vendors.companyName,'
+                'vendors.contractPrice,vendors.discount,vendors.vrcListPrice,'
+                'vendors.geoMapType,vendors.leadTime,vendors.VRC'
         }
         filters = []
         
@@ -197,10 +209,20 @@ def search():
                 'brandName': doc.get('brandName', ''),
                 'MaterialId': material_id,
                 'productSpecification': doc.get('productSpecification', ''),
-                'listPrice': doc.get('listPrice', '')
+                'listPrice': doc.get('listPrice', ''),
+                'vendors': doc.get('vendors', [])
             })
+            # import pprint
+            # pprint.pp(doc)
+    output.sort(
+        key=lambda x: (
+            0 if any(
+                str(v.get("VRC", "")).strip().upper() == "VRC"
+                for v in x.get("vendors", [])
+            ) else 1
+        )
+    )
     return jsonify(output)
-
 
 if __name__ == "__main__":
     app.run(debug=True)
