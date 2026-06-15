@@ -141,6 +141,7 @@ def search():
             output.append({
                 'productName': doc.get('productName', ''),
                 'brandName': doc.get('brandName', ''),
+                'variantName': doc.get('variantName', ''),
                 'MaterialId': doc.get('materialId', ''),
                 'productSpecification': doc.get('productSpecification', ''),
                 'listPrice': doc.get('listPrice', ''),
@@ -207,6 +208,7 @@ def search():
             output.append({
                 'productName': doc.get('productName', ''),
                 'brandName': doc.get('brandName', ''),
+                'variantName': doc.get('variantName', ''),
                 'MaterialId': material_id,
                 'productSpecification': doc.get('productSpecification', ''),
                 'listPrice': doc.get('listPrice', ''),
