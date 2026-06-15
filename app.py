@@ -126,7 +126,7 @@ def search():
             'per_page': 20,
             'sort_by': '_text_match:desc',
             'include_fields':
-                'materialId,productName,brandName,variantName,'
+                'materialId,productName,brandName,variantName,categoryName,'
                 'productSpecification,listPrice,vendors,vendors.companyName,'
                 'vendors.contractPrice,vendors.vrcListPrice,'
                 'vendors.leadTime,vendors.VRC'
@@ -142,6 +142,7 @@ def search():
                 'productName': doc.get('productName', ''),
                 'brandName': doc.get('brandName', ''),
                 'variantName': doc.get('variantName', ''),
+                'categoryName': doc.get('categoryName', ''),
                 'MaterialId': doc.get('materialId', ''),
                 'productSpecification': doc.get('productSpecification', ''),
                 'listPrice': doc.get('listPrice', ''),
@@ -174,7 +175,7 @@ def search():
             'prioritize_num_matching_fields': True,
             'sort_by': '_text_match:desc',
             'include_fields':
-                'materialId,productName,brandName,variantName,'
+                'materialId,productName,brandName,variantName,categoryName,'
                 'productSpecification,listPrice,vendors,vendors.companyName,'
                 'vendors.contractPrice,vendors.discount,vendors.vrcListPrice,'
                 'vendors.geoMapType,vendors.leadTime,vendors.VRC'
@@ -209,6 +210,7 @@ def search():
                 'productName': doc.get('productName', ''),
                 'brandName': doc.get('brandName', ''),
                 'variantName': doc.get('variantName', ''),
+                'categoryName': doc.get('categoryName', ''),
                 'MaterialId': material_id,
                 'productSpecification': doc.get('productSpecification', ''),
                 'listPrice': doc.get('listPrice', ''),
