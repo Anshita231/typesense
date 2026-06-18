@@ -81,7 +81,7 @@
 
     const searchBox = document.getElementById("search-box");
     const resultsDiv = document.getElementById("results");
-
+    
     let debounceTimer;
 
     searchBox.addEventListener("input", () => {
@@ -107,7 +107,46 @@
 
             data.forEach(product => {
 
-                let vendorsHtml = "";
+                let arcHtml = "";
+                let vrcHtml = "";
+
+                /* ARC Vendor */
+
+                const arcVendor =
+                    product.ARCvendors &&
+                    product.ARCvendors.find(
+                        a => String(a.ARC || "").trim().toUpperCase() === "ARC"
+                    );
+
+                if (arcVendor) {
+                    const validityDate = arcVendor.validityPeriod
+                        ? new Date(arcVendor.validityPeriod).toLocaleDateString("en-IN")
+                        : "-";
+                    arcHtml = `
+                        <div style="
+                            margin-top:12px;
+                            padding:10px;
+                            background:#eff6ff;
+                            border-left:4px solid #2563eb;
+                            border-radius:6px;
+                            font-size:14px;
+                        ">
+                            <b>ARC Client:</b> ${arcVendor.companyName || "-"}
+                            &nbsp; | &nbsp;
+                            <b>ERP Code:</b> ${arcVendor.companyERPCode ?? "-"}
+                            &nbsp; | &nbsp;
+                            <b>Branch:</b> ${arcVendor.branchName ?? "-"}
+                            <br><br>
+                            <b>Unit Price:</b> ${arcVendor.UnitPrice ?? "-"}
+                            &nbsp; | &nbsp;
+                            <b>Lead Time:</b> ${arcVendor.arcLeadTime ?? "-"}
+                            &nbsp; | &nbsp;
+                            <b>Validity:</b> ${validityDate}
+                        </div>
+                    `;
+                }
+
+                /* VRC Vendor */
 
                 const vrcVendor =
                     product.vendors &&
@@ -115,9 +154,9 @@
                         v => String(v.VRC || "").trim().toUpperCase() === "VRC"
                     );
 
-                if(vrcVendor){
+                if (vrcVendor) {
 
-                    vendorsHtml = `
+                    vrcHtml = `
                         <div style="
                             margin-top:12px;
                             padding:10px;
@@ -126,22 +165,28 @@
                             border-radius:6px;
                             font-size:14px;
                         ">
-                            <b>Vendor:</b> ${vrcVendor.companyName || "-"}
+                            <b>VRC Vendor:</b> ${vrcVendor.companyName || "-"}
+                            &nbsp; | &nbsp;
+                            <b>Geo Map Type:</b> ${vrcVendor.geoMapType ?? "-"}
+                            &nbsp; | &nbsp;
+                            <b>State:</b> ${vrcVendor.stateName ?? "-"}
+                            <br><br>
+                            <b>Lead Time:</b> ${vrcVendor.leadTime ?? "-"}
                             &nbsp; | &nbsp;
                             <b>List Price:</b> ${vrcVendor.vrcListPrice ?? "-"}
                             &nbsp; | &nbsp;
                             <b>Discount:</b> ${vrcVendor.discount ?? "-"}
                             &nbsp; | &nbsp;
                             <b>Contract Price:</b> ${vrcVendor.contractPrice ?? "-"}
-                            <br><br>
-                            <b>Geo Map Type:</b> ${vrcVendor.geoMapType ?? "-"}
-                            &nbsp; | &nbsp;
-                            <b>Lead Time:</b> ${vrcVendor.leadTime ?? "-"}
-                            &nbsp; | &nbsp;
-                            <b>State:</b> ${vrcVendor.stateName ?? "-"}
                         </div>
                     `;
                 }
+
+                const hasARC =
+                    product.ARCvendors &&
+                    product.ARCvendors.some(
+                        a => String(a.ARC || "").trim().toUpperCase() === "ARC"
+                    );
 
                 const hasVRC =
                     product.vendors &&
@@ -161,11 +206,10 @@
                                 ${product.productName}
                             </h3>
 
-                            ${
-                                hasVRC
-                                ? '<span class="vrc-tag">VRC</span>'
-                                : ''
-                            }
+                            <div style="display:flex;gap:8px;">
+                                ${hasARC ? '<span class="vrc-tag" style="background:#2563eb;">ARC</span>' : ''}
+                                ${hasVRC ? '<span class="vrc-tag">VRC</span>' : ''}
+                            </div>
                         </div>
 
                         <p><b>Material ID:</b> ${product.MaterialId}</p>
@@ -175,7 +219,8 @@
                         <p><b>Specification:</b> ${product.productSpecification}</p>
                         <p><b>List Price:</b> ${product.listPrice || "-"}</p>
 
-                        ${vendorsHtml}
+                        ${arcHtml}
+                        ${vrcHtml}
 
                     </div>
                 `;
