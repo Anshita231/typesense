@@ -107,13 +107,14 @@ def parse_query(query):
 #PART NO
 # print(os.getenv("TYPESENSE_HOST"))
 # print(os.getenv("TYPESENSE_API_KEY"))
+
 client = typesense.Client({
     'nodes': [{
-        'host': "x5y9s0ilj2gvh8p7p-1.a1.typesense.net",
+        'host': os.getenv('TYPESENSE_HOST'),
         'port': '443',
         'protocol': 'https'
     }],
-    'api_key': "QXyEXsatg9YJc30P37deOA4qN9gyN6zF",
+    'api_key': os.getenv('TYPESENSE_API_KEY'),
     'connection_timeout_seconds': 20
 })
 
@@ -138,6 +139,8 @@ def search():
     # ----------------------------
     # Material Id Priority Search
     # ----------------------------
+    output = []
+    seen = set()
     if material_id:
         try:
             doc = client.collections['product'].documents[
@@ -156,7 +159,7 @@ def search():
                 'ARCvendors': doc.get('ARCvendors', [])
             }]
 
-            return jsonify(output)
+            seen.add(int(material_id))
 
         except typesense.exceptions.ObjectNotFound:
             pass
@@ -174,9 +177,6 @@ def search():
         })
 
         if erp_results["found"] > 0:
-
-            output = []
-            seen = set()
 
             for hit in erp_results["hits"]:
 
@@ -206,10 +206,17 @@ def search():
             output.sort(key=sort_priority)
 
             if output:
-                return jsonify(output)
+                first = output[:1]
+                rest = output[1:]
+
+                rest.sort(key=sort_priority)
+
+                return jsonify(first + rest)
 
     except Exception:
         pass
+    if output:
+        return jsonify(output)
     # ----------------------------
     # Model Number Priority Search
     # ----------------------------
@@ -256,7 +263,6 @@ def search():
 
     output = []
     seen = set()
-
     for q in expanded_queries:
 
         search_parameters = {
