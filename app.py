@@ -206,12 +206,8 @@ def search():
             output.sort(key=sort_priority)
 
             if output:
-                first = output[:1]
-                rest = output[1:]
 
-                rest.sort(key=sort_priority)
-
-                return jsonify(first + rest)
+                return jsonify(output)
 
     except Exception:
         pass
