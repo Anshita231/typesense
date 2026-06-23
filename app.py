@@ -6,6 +6,34 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 
+SYNONYMS = {
+    "v belt": "v-belt",
+    "belt v": "v-belt",
+    "t bolt": "t-bolt",
+    "u clamp": "u-clamp",
+    "o ring": "o-ring",
+    "hexagonal ": "hex ",
+    "mm2" : "sqmm",
+    "mm2": "mm"
+}
+
+# def normalize(text):
+#     if pd.isna(text):
+#         return ""
+
+#     text = str(text).lower()
+
+#     # replace hyphens with spaces
+#     # text = text.replace("-", " ")
+
+#     # replace commas with spaces
+#     text = text.replace(",", " ")
+
+#     # collapse multiple spaces into one
+#     text = re.sub(r"\s+", " ", text)
+
+#     return text.strip()
+
 def expand_query(q):
 
     q = q.lower()
@@ -19,9 +47,46 @@ def expand_query(q):
     v3 = re.sub(r'(\d+)\s+traid\b', r'\1traid', q)
     v4 = re.sub(r'(\d+)traid\b', r'\1 traid', q)
 
-    for v in [v1, v2, v3, v4]:
+    # a-56 -> a56
+    v5 = re.sub(r'\b([a-ln-z]+)-(\d+)\b', r'\1\2', q)
+
+    # # a-56 -> a 56
+    v6 = re.sub(r'\b([a-ln-z]]+)-(\d+)\b', r'\1 \2', q)
+
+    # a 56 -> a56
+    v7 = re.sub(r'\b([a-ln-z]+)\s+(\d+)\b', r'\1\2', q)
+
+    # # a 56 -> a-56
+    v8 = re.sub(r'\b([a-ln-z]+)\s+(\d+)\b', r'\1-\2', q)
+
+    # # a56 -> a 56
+    v9 = re.sub(r'\b([a-ln-z]+)(\d+)\b', r'\1 \2', q)
+
+    # # a56 -> a-56
+    v10 = re.sub(r'\b([a-ln-z]+)(\d+)\b', r'\1-\2', q)
+
+    # m 14 -> 14
+    v11 = re.sub(r'\bm\s+(\d+)\b', r'\1', q)
+
+    for v in [v1, v2, v3, v4, v5, v7, v6, v8, v9, v10, v11]: #, v6, v8, v9, v10
         if v not in variants:
             variants.append(v)
+
+    # synonyms
+    current_variants = variants.copy()
+
+    for q2 in current_variants:
+        for k, v in SYNONYMS.items():
+
+            if k in q2:
+                new_q = q2.replace(k, v)
+                if new_q not in variants:
+                    variants.append(new_q)
+
+            if v in q2:
+                new_q = q2.replace(v, k)
+                if new_q not in variants:
+                    variants.append(new_q)
 
     return variants
 
@@ -63,6 +128,7 @@ KNOWN_ATTRIBUTES = {
 def parse_query(query):
 
     query_lower = query.lower()
+    
     material_id = None
     model_number = None
 
@@ -83,6 +149,15 @@ def parse_query(query):
             match.group(0),
             " "
         )
+    #     # NEW: auto detect alphanumeric tokens
+    # if model_number is None:
+    #     tokens = query_lower.split()
+
+    #     for token in tokens:
+    #         # ss304, b-130, a56, 6205zz, m12 etc.
+    #         if re.search(r'[a-z]', token) and re.search(r'\d', token):
+    #             model_number = token
+    #             break
 
     words = query_lower.split()
 
@@ -93,10 +168,10 @@ def parse_query(query):
     for word in words:
         if word in KNOWN_BRANDS:
             brand = word
-        elif word in KNOWN_ATTRIBUTES:
-            attributes.append(word)
         else:
             remaining.append(word)
+            if word in KNOWN_ATTRIBUTES:
+                attributes.append(word)
     return {
         "material_id": material_id,
         "model_number": model_number,
@@ -104,6 +179,7 @@ def parse_query(query):
         "attributes": attributes,
         "query": " ".join(remaining)
     }
+
 #PART NO
 # print(os.getenv("TYPESENSE_HOST"))
 # print(os.getenv("TYPESENSE_API_KEY"))
@@ -127,14 +203,43 @@ def home():
 def search():
 
     query = request.args.get("q", "")
+    q2 = query
+    # print(query)
+    # treat commas as spaces
+    query = query.replace(",", " ")
+    # print(query)
+    # remove extra spaces
+    query = " ".join(query.split())
+    # print(query)
 
+    query = re.sub(r'(\d+(?:\.\d+)?)([a-z]+)\b', r'\1 \2', query, flags=re.IGNORECASE)
+    # print(query)
+
+    query = re.sub(r'\bm(\d+(?:\s*[x\*]\s*\d+)?)', r'm \1', query, flags=re.IGNORECASE)
+    # print(query)
+    # a"xb"
     parsed = parse_query(query)
+    m_frac = re.search(r'(\d+(?:-\d+)?/\d+)"?\s*[xX\*]\s*(\d+(?:-\d+)?(?:/\d+)?)"?', query)
+    if m_frac:
+        d1 = m_frac.group(1)
+        d2 = m_frac.group(2)
+        query = re.sub(r'(\d+(?:-\d+)?(?:/\d+)?)"?\s*[xX\*]\s*(\d+(?:-\d+)?(?:/\d+)?)"?',
+            f'{d1} inch diameter {d2} inch length', query)
+    # print(query)
 
+    # axb, a x b, aXb, a*b and similar
+    m = re.search(r'\b(\d+)\s*[xX\*]\s*(\d+)\b', query)
+    if m:
+        d1 = m.group(1)
+        d2 = m.group(2)
+        query = re.sub(r'\b\d+\s*[xX\*]\s*\d+\b', f'{d1} length {d2} diameter', query)
+    # print(query)
+    parsed1 = parse_query(query)
     material_id = parsed["material_id"]
     model_number = parsed['model_number']
     brand = parsed['brand']
     attributes = parsed['attributes']
-    clean_query = parsed['query']
+    clean_query = parsed1['query']
 
     # ----------------------------
     # Material Id Priority Search
@@ -168,51 +273,44 @@ def search():
     # ERP Code Priority Search
     # ----------------------------
     try:
-
-        erp_results = client.collections["erp_mapping"].documents.search({
+        erp_results = client.collections["product"].documents.search({
             "q": query,
-            "query_by": "companyERPCode",
-            "filter_by": f"companyERPCode:={query}",
+            "query_by": "companyERPCodes",
+            "filter_by": f"companyERPCodes:={query}",
             "per_page": 20
         })
 
-        if erp_results["found"] > 0:
+        for hit in erp_results["hits"]:
 
-            for hit in erp_results["hits"]:
+            doc = hit["document"]
 
-                material_id = hit["document"]["materialId"]
+            material_id = doc["materialId"]
 
-                if material_id in seen:
-                    continue
+            if material_id in seen:
+                continue
 
-                seen.add(material_id)
+            seen.add(material_id)
 
-                doc = client.collections["product"].documents[
-                    str(material_id)
-                ].retrieve()
+            output.append({
+                'productName': doc.get('productName', ''),
+                'brandName': doc.get('brandName', ''),
+                'variantName': doc.get('variantName', ''),
+                'categoryName': doc.get('categoryName', ''),
+                'MaterialId': doc.get('materialId', ''),
+                'productSpecification': doc.get('productSpecification', ''),
+                'listPrice': doc.get('listPrice', ''),
+                'vendors': doc.get('vendors', []),
+                'ARCvendors': doc.get('ARCvendors', [])
+            })
 
-                output.append({
-                    'productName': doc.get('productName', ''),
-                    'brandName': doc.get('brandName', ''),
-                    'variantName': doc.get('variantName', ''),
-                    'categoryName': doc.get('categoryName', ''),
-                    'MaterialId': doc.get('materialId', ''),
-                    'productSpecification': doc.get('productSpecification', ''),
-                    'listPrice': doc.get('listPrice', ''),
-                    'vendors': doc.get('vendors', []),
-                    'ARCvendors': doc.get('ARCvendors', [])
-                })
+        output.sort(key=sort_priority)
 
-            output.sort(key=sort_priority)
-
-            if output:
-
-                return jsonify(output)
+        if output:
+            return jsonify(output)
 
     except Exception:
         pass
-    if output:
-        return jsonify(output)
+    
     # ----------------------------
     # Model Number Priority Search
     # ----------------------------
@@ -255,12 +353,15 @@ def search():
         if output:
             return jsonify(output)
 
-    expanded_queries = expand_query(clean_query)
+    # expanded_queries = expand_query(clean_query)
+    expanded_queries = list(dict.fromkeys([q2] + expand_query(clean_query)))
+
+    # expanded_queries.append(q2)
 
     output = []
     seen = set()
     for q in expanded_queries:
-
+        # print(q)
         search_parameters = {
             'q': q,
             'query_by': 'productName, variantName, productSpecification',
@@ -290,6 +391,13 @@ def search():
         results = client.collections['product'].documents.search(
             search_parameters
         )
+        # print("Found:", results['found'])
+        # mat_ids = [
+        #     hit['document'].get('materialId')
+        #     for hit in results['hits']
+        # ]
+
+        # print("Material IDs:", mat_ids)
 
         for hit in results['hits']:
 
@@ -311,12 +419,11 @@ def search():
                 'productSpecification': doc.get('productSpecification', ''),
                 'listPrice': doc.get('listPrice', ''),
                 'vendors': doc.get('vendors', []),
-                'ARCvendors': doc.get('ARCvendors', [])
+                'ARCvendors': doc.get('ARCvendors', []) 
             })
             # import pprint
             # pprint.pp(doc)
     
-
     output.sort(key=sort_priority)        
 
     return jsonify(output)
