@@ -81,9 +81,191 @@
 
     const searchBox = document.getElementById("search-box");
     const resultsDiv = document.getElementById("results");
-    
+    let allProducts = [];
+    let currentPage = 1;
+    const pageSize = 10;
     let debounceTimer;
+    function renderPage() {
 
+        if (allProducts.length === 0) {
+            resultsDiv.innerHTML = `
+            <div class="card">
+                No products found.
+                </div>
+                `;
+                return;
+            }
+
+        resultsDiv.innerHTML = "";
+        const totalPages = Math.ceil(allProducts.length / pageSize);
+
+        const start = (currentPage - 1) * pageSize;
+        const end = start + pageSize;
+
+        const pageProducts = allProducts.slice(start, end);
+
+        // resultsDiv.innerHTML += `
+        //     <div style="
+        //         background:white;
+        //         padding:15px;
+        //         margin-bottom:20px;
+        //         border-radius:10px;
+        //         text-align:center;
+        //         font-size:18px;
+        //         font-weight:bold;
+        //     ">
+        //         Total Results: ${allProducts.length}
+        //     </div>
+        // `;
+
+        pageProducts.forEach(product => {
+
+            let arcHtml = "";
+            let vrcHtml = "";
+
+            const arcVendors = product.ARCvendors?.filter(
+                a => String(a.ARC || "").trim().toUpperCase() === "ARC"
+            ) || [];
+
+            arcHtml = arcVendors.map(arcVendor => {
+
+                const validityDate = arcVendor.validityPeriod
+                    ? new Date(arcVendor.validityPeriod).toLocaleDateString("en-IN")
+                    : "-";
+
+                return `
+                    <div style="
+                        margin-top:12px;
+                        padding:10px;
+                        background:#eff6ff;
+                        border-left:4px solid #2563eb;
+                        border-radius:6px;
+                        font-size:14px;
+                    ">
+                        <b>ARC Client:</b> ${arcVendor.companyName || "-"}
+                        &nbsp; | &nbsp;
+                        <b>ERP Code:</b> ${arcVendor.companyERPCode ?? "-"}
+                        &nbsp; | &nbsp;
+                        <b>Branch:</b> ${arcVendor.branchName ?? "-"}
+                        <br><br>
+                        <b>Unit Price:</b> ${arcVendor.UnitPrice ?? "-"}
+                        &nbsp; | &nbsp;
+                        <b>Lead Time:</b> ${arcVendor.arcLeadTime ?? "-"}
+                        &nbsp; | &nbsp;
+                        <b>Validity:</b> ${validityDate}
+                    </div>
+                `;
+            }).join("");
+
+            const vrcVendors = product.vendors?.filter(
+                v => String(v.VRC || "").trim().toUpperCase() === "VRC"
+            ) || [];
+
+            vrcHtml = vrcVendors.map(v => `
+                <div style="
+                    margin-top:12px;
+                    padding:10px;
+                    background:#f0fdf4;
+                    border-left:4px solid #16a34a;
+                    border-radius:6px;
+                    font-size:14px;
+                ">
+                    <b>VRC Vendor:</b> ${v.companyName || "-"}
+                    &nbsp; | &nbsp;
+                    <b>Geo Map Type:</b> ${v.geoMapType ?? "-"}
+                    &nbsp; | &nbsp;
+                    <b>State:</b> ${v.stateName ?? "-"}
+                    <br><br>
+                    <b>Lead Time:</b> ${v.leadTime ?? "-"}
+                    &nbsp; | &nbsp;
+                    <b>List Price:</b> ${v.vrcListPrice ?? "-"}
+                    &nbsp; | &nbsp;
+                    <b>Discount:</b> ${v.discount ?? "-"}
+                    &nbsp; | &nbsp;
+                    <b>Contract Price:</b> ${v.contractPrice ?? "-"}
+                </div>
+            `).join("");
+
+            const hasARC = product.ARCvendors &&
+                product.ARCvendors.some(
+                    a => String(a.ARC || "").trim().toUpperCase() === "ARC"
+                );
+
+            const hasVRC = product.vendors &&
+                product.vendors.some(
+                    v => String(v.VRC || "").trim().toUpperCase() === "VRC"
+                );
+
+            resultsDiv.innerHTML += `
+                <div class="card">
+
+                    <div style="
+                        display:flex;
+                        justify-content:space-between;
+                        align-items:center;
+                    ">
+                        <h3 style="margin:0;">
+                            ${product.productName}
+                        </h3>
+
+                        <div style="display:flex;gap:8px;">
+                            ${hasARC ? '<span class="vrc-tag" style="background:#2563eb;">ARC</span>' : ''}
+                            ${hasVRC ? '<span class="vrc-tag">VRC</span>' : ''}
+                        </div>
+                    </div>
+
+                    <p><b>Material ID:</b> ${product.MaterialId}</p>
+                    <p><b>Brand:</b> ${product.brandName}</p>
+                    <p><b>Category:</b> ${product.categoryName || "-"}</p>
+                    <p><b>Variant Name:</b> ${product.variantName || "-"}</p>
+                    <p><b>Specification:</b> ${product.productSpecification}</p>
+                    <p><b>List Price:</b> ${product.listPrice || "-"}</p>
+
+                    ${arcHtml}
+                    ${vrcHtml}
+
+                </div>
+            `;
+        });
+
+        resultsDiv.innerHTML += `
+            <div style="
+                display:flex;
+                justify-content:center;
+                gap:20px;
+                margin-top:20px;
+            ">
+                <button onclick="prevPage()"
+                    ${currentPage===1 ? "disabled" : ""}>
+                    Previous
+                </button>
+
+                <span>
+                    Page ${currentPage} of ${totalPages}
+                </span>
+
+                <button onclick="nextPage()"
+                    ${currentPage===totalPages ? "disabled" : ""}>
+                    Next
+                </button>
+            </div>
+        `;
+    }
+    function nextPage() {
+        if (currentPage * pageSize < allProducts.length) {
+            currentPage++;
+            renderPage();
+            window.scrollTo({top:0, behavior:"smooth"});
+        }
+    }
+
+    function prevPage() {
+        if (currentPage > 1) {
+            currentPage--;
+            renderPage();
+            window.scrollTo({top:0, behavior:"smooth"});
+        }
+    }
     searchBox.addEventListener("input", () => {
 
         clearTimeout(debounceTimer);
@@ -101,130 +283,9 @@
                 `/search?q=${encodeURIComponent(query)}`
             );
 
-            let data = await response.json();
-
-            resultsDiv.innerHTML = "";
-
-            data.forEach(product => {
-
-                let arcHtml = "";
-                let vrcHtml = "";
-
-                /* ARC Vendor */
-
-                const arcVendor =
-                    product.ARCvendors &&
-                    product.ARCvendors.find(
-                        a => String(a.ARC || "").trim().toUpperCase() === "ARC"
-                    );
-
-                if (arcVendor) {
-                    const validityDate = arcVendor.validityPeriod
-                        ? new Date(arcVendor.validityPeriod).toLocaleDateString("en-IN")
-                        : "-";
-                    arcHtml = `
-                        <div style="
-                            margin-top:12px;
-                            padding:10px;
-                            background:#eff6ff;
-                            border-left:4px solid #2563eb;
-                            border-radius:6px;
-                            font-size:14px;
-                        ">
-                            <b>ARC Client:</b> ${arcVendor.companyName || "-"}
-                            &nbsp; | &nbsp;
-                            <b>ERP Code:</b> ${arcVendor.companyERPCode ?? "-"}
-                            &nbsp; | &nbsp;
-                            <b>Branch:</b> ${arcVendor.branchName ?? "-"}
-                            <br><br>
-                            <b>Unit Price:</b> ${arcVendor.UnitPrice ?? "-"}
-                            &nbsp; | &nbsp;
-                            <b>Lead Time:</b> ${arcVendor.arcLeadTime ?? "-"}
-                            &nbsp; | &nbsp;
-                            <b>Validity:</b> ${validityDate}
-                        </div>
-                    `;
-                }
-
-                /* VRC Vendor */
-
-                const vrcVendor =
-                    product.vendors &&
-                    product.vendors.find(
-                        v => String(v.VRC || "").trim().toUpperCase() === "VRC"
-                    );
-
-                if (vrcVendor) {
-
-                    vrcHtml = `
-                        <div style="
-                            margin-top:12px;
-                            padding:10px;
-                            background:#f0fdf4;
-                            border-left:4px solid #16a34a;
-                            border-radius:6px;
-                            font-size:14px;
-                        ">
-                            <b>VRC Vendor:</b> ${vrcVendor.companyName || "-"}
-                            &nbsp; | &nbsp;
-                            <b>Geo Map Type:</b> ${vrcVendor.geoMapType ?? "-"}
-                            &nbsp; | &nbsp;
-                            <b>State:</b> ${vrcVendor.stateName ?? "-"}
-                            <br><br>
-                            <b>Lead Time:</b> ${vrcVendor.leadTime ?? "-"}
-                            &nbsp; | &nbsp;
-                            <b>List Price:</b> ${vrcVendor.vrcListPrice ?? "-"}
-                            &nbsp; | &nbsp;
-                            <b>Discount:</b> ${vrcVendor.discount ?? "-"}
-                            &nbsp; | &nbsp;
-                            <b>Contract Price:</b> ${vrcVendor.contractPrice ?? "-"}
-                        </div>
-                    `;
-                }
-
-                const hasARC =
-                    product.ARCvendors &&
-                    product.ARCvendors.some(
-                        a => String(a.ARC || "").trim().toUpperCase() === "ARC"
-                    );
-
-                const hasVRC =
-                    product.vendors &&
-                    product.vendors.some(
-                        v => String(v.VRC || "").trim().toUpperCase() === "VRC"
-                    );
-
-                resultsDiv.innerHTML += `
-                    <div class="card">
-
-                        <div style="
-                            display:flex;
-                            justify-content:space-between;
-                            align-items:center;
-                        ">
-                            <h3 style="margin:0;">
-                                ${product.productName}
-                            </h3>
-
-                            <div style="display:flex;gap:8px;">
-                                ${hasARC ? '<span class="vrc-tag" style="background:#2563eb;">ARC</span>' : ''}
-                                ${hasVRC ? '<span class="vrc-tag">VRC</span>' : ''}
-                            </div>
-                        </div>
-
-                        <p><b>Material ID:</b> ${product.MaterialId}</p>
-                        <p><b>Brand:</b> ${product.brandName}</p>
-                        <p><b>Category:</b> ${product.categoryName || "-"}</p>
-                        <p><b>Variant Name:</b> ${product.variantName || "-"}</p>
-                        <p><b>Specification:</b> ${product.productSpecification}</p>
-                        <p><b>List Price:</b> ${product.listPrice || "-"}</p>
-
-                        ${arcHtml}
-                        ${vrcHtml}
-
-                    </div>
-                `;
-            });
+            allProducts = await response.json();
+            currentPage = 1;
+            renderPage();
         }, 100);
 });
 
