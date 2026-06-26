@@ -6,15 +6,28 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 
-SYNONYMS = {
+DOUBLE_SYNONYMS = {
     "v belt": "v-belt",
     "belt v": "v-belt",
     "t bolt": "t-bolt",
     "u clamp": "u-clamp",
     "o ring": "o-ring",
     "hexagonal ": "hex ",
+    "pliers" : "plier",
+}
+
+SINGLE_SYNONYMS = {
     "mm2" : "sqmm",
-    "mm2": "mm"
+    "mm2": "mm",
+    "cores": "core",
+    "cables":"cable",
+    "SQ" : "sqmm",
+    "flex" : "flexible",
+    "single" : "1",
+    "one" : "1",
+    "-" : " ",
+    "screw driver": "screwdriver",
+    " zz ": "2z"
 }
 
 # def normalize(text):
@@ -54,10 +67,10 @@ def expand_query(q):
     v6 = re.sub(r'\b([a-ln-z]]+)-(\d+)\b', r'\1 \2', q)
 
     # a 56 -> a56
-    v7 = re.sub(r'\b([a-ln-z]+)\s+(\d+)\b', r'\1\2', q)
+    # v7 = re.sub(r'\b([a-ln-z]+)\s+(\d+)\b', r'\1\2', q)
 
     # # a 56 -> a-56
-    v8 = re.sub(r'\b([a-ln-z]+)\s+(\d+)\b', r'\1-\2', q)
+    # v8 = re.sub(r'\b([a-ln-z]+)\s+(\d+)\b', r'\1-\2', q)
 
     # # a56 -> a 56
     v9 = re.sub(r'\b([a-ln-z]+)(\d+)\b', r'\1 \2', q)
@@ -68,7 +81,7 @@ def expand_query(q):
     # m 14 -> 14
     v11 = re.sub(r'\bm\s+(\d+)\b', r'\1', q)
 
-    for v in [v1, v2, v3, v4, v5, v7, v6, v8, v9, v10, v11]: #, v6, v8, v9, v10
+    for v in [v1, v2, v3, v4, v5, v6, v9, v10, v11]: #, v6, v8, v9, v10
         if v not in variants:
             variants.append(v)
 
@@ -76,7 +89,7 @@ def expand_query(q):
     current_variants = variants.copy()
 
     for q2 in current_variants:
-        for k, v in SYNONYMS.items():
+        for k, v in DOUBLE_SYNONYMS.items():
 
             if k in q2:
                 new_q = q2.replace(k, v)
@@ -88,17 +101,26 @@ def expand_query(q):
                 if new_q not in variants:
                     variants.append(new_q)
 
+    for q2 in current_variants:
+        for k, v in SINGLE_SYNONYMS.items():
+
+            if k in q2:
+                new_q = q2.replace(k, v)
+                if new_q not in variants:
+                    variants.append(new_q)
+
     return variants
+
 
 def sort_priority(product):
 
     has_arc = len(product.get("ARCvendors", [])) > 0
     has_vrc = len(product.get("vendors", [])) > 0
 
-    if has_arc:
+    if has_vrc:
         return 0
 
-    if has_vrc:
+    if has_arc:
         return 1
 
     return 2
@@ -211,12 +233,11 @@ def search():
     # remove extra spaces
     query = " ".join(query.split())
     # print(query)
-
     query = re.sub(r'(\d+(?:\.\d+)?)([a-z]+)\b', r'\1 \2', query, flags=re.IGNORECASE)
-    # print(query)
+    # # print(query)
 
     query = re.sub(r'\bm(\d+(?:\s*[x\*]\s*\d+)?)', r'm \1', query, flags=re.IGNORECASE)
-    # print(query)
+    # # print(query)
     # a"xb"
     parsed = parse_query(query)
     m_frac = re.search(r'(\d+(?:-\d+)?/\d+)"?\s*[xX\*]\s*(\d+(?:-\d+)?(?:/\d+)?)"?', query)
@@ -299,6 +320,8 @@ def search():
                 'MaterialId': doc.get('materialId', ''),
                 'productSpecification': doc.get('productSpecification', ''),
                 'listPrice': doc.get('listPrice', ''),
+                'shortDescription': doc.get('shortDescription', ''),
+                'UOM': doc.get('UOM', ''),
                 'vendors': doc.get('vendors', []),
                 'ARCvendors': doc.get('ARCvendors', [])
             })
@@ -323,7 +346,7 @@ def search():
             'sort_by': '_text_match:desc',
             'include_fields':
                 'materialId, productName, brandName, variantName, categoryName,'
-                'productSpecification, listPrice, vendors, vendors.companyName,'
+                'productSpecification, listPrice, UOM, shortDescription, vendors, vendors.companyName,'
                 'vendors.contractPrice, vendors.vrcListPrice,'
                 'vendors.leadTime, vendors.VRC, ARCvendors, ARCvendors.UnitPrice,'
                 'ARCvendors.branchName, ARCvendors.arcLeadTime, ARCvendors.arcLeadTime,'
@@ -344,6 +367,8 @@ def search():
                 'MaterialId': doc.get('materialId', ''),
                 'productSpecification': doc.get('productSpecification', ''),
                 'listPrice': doc.get('listPrice', ''),
+                'shortDescription': doc.get('shortDescription', ''),
+                'UOM': doc.get('UOM', ''),
                 'vendors': doc.get('vendors', []),
                 'ARCvendors': doc.get('ARCvendors', [])
             })
@@ -371,7 +396,7 @@ def search():
             'sort_by': '_text_match:desc',
             'include_fields':
                 'materialId, productName, brandName, variantName, categoryName,'
-                'productSpecification, listPrice, vendors, vendors.companyName,'
+                'productSpecification, listPrice, UOM, shortDescription, vendors, vendors.companyName,'
                 'vendors.contractPrice, vendors.discount, vendors.vrcListPrice,'
                 'vendors.leadTime, vendors.VRC, ARCvendors, ARCvendors.UnitPrice,'
                 'ARCvendors.branchName, ARCvendors.arcLeadTime, ARCvendors.arcLeadTime,'
@@ -418,6 +443,8 @@ def search():
                 'MaterialId': material_id,
                 'productSpecification': doc.get('productSpecification', ''),
                 'listPrice': doc.get('listPrice', ''),
+                'shortDescription': doc.get('shortDescription', ''),
+                'UOM': doc.get('UOM', ''),
                 'vendors': doc.get('vendors', []),
                 'ARCvendors': doc.get('ARCvendors', []) 
             })
@@ -425,7 +452,7 @@ def search():
             # pprint.pp(doc)
     
     output.sort(key=sort_priority)        
-
+    output = output[:10]
     return jsonify(output)
 
 if __name__ == "__main__":
