@@ -213,6 +213,30 @@ function renderPage() {
             </div>
         `;
     });
+
+    resultsDiv.innerHTML += `
+       <div style="display:flex;justify-content:center;gap:20px;margin-top:20px;">
+           <button onclick="prevPage()" ${currentPage === 1 ? "disabled" : ""}>Previous</button>
+           <span>Page ${currentPage} of ${totalPages}</span>
+           <button onclick="nextPage()" ${currentPage === totalPages ? "disabled" : ""}>Next</button>
+       </div>
+    `;
+}
+
+function nextPage() {
+   if (currentPage * pageSize < allProducts.length) {
+       currentPage++;
+       renderPage();
+       window.scrollTo({ top: 0, behavior: "smooth" });
+   }
+}
+
+function prevPage() {
+   if (currentPage > 1) {
+       currentPage--;
+       renderPage();
+       window.scrollTo({ top: 0, behavior: "smooth" });
+   }
 }
 
 searchBox.addEventListener("input", () => {

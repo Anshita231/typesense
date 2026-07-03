@@ -27,28 +27,11 @@ SINGLE_SYNONYMS = {
     "one" : "1",
     "-" : " ",
     "screw driver": "screwdriver",
-    " zz ": "2z"
+    " zz ": "2z",
+    "core of cable":"number of cores"
 }
 
-# def normalize(text):
-#     if pd.isna(text):
-#         return ""
-
-#     text = str(text).lower()
-
-#     # replace hyphens with spaces
-#     # text = text.replace("-", " ")
-
-#     # replace commas with spaces
-#     text = text.replace(",", " ")
-
-#     # collapse multiple spaces into one
-#     text = re.sub(r"\s+", " ", text)
-
-#     return text.strip()
-
 def expand_query(q):
-
     q = q.lower()
     variants = [q]
 
@@ -111,6 +94,26 @@ def expand_query(q):
 
     return variants
 
+# SEPARATE_NUMBER_WORDS = {
+#     "core", "sqmm", "sq", "mm", "mm2", "inch", "pin", "amp", "kv", "v", "w", "ltr", "kg", "gm", "m"}
+
+# WORDS_PATTERN = "|".join(map(re.escape, SEPARATE_NUMBER_WORDS))
+
+# def separate_number_words(text):
+#     text = re.sub(
+#         rf'(\d+(?:\.\d+)?)(?=({WORDS_PATTERN})\b)',
+#         r'\1 ',
+#         text,
+#         flags=re.IGNORECASE
+#     )
+
+#     text = re.sub(
+#         rf'\b({WORDS_PATTERN})(?=\d)',
+#         r'\1 ',
+#         text,
+#         flags=re.IGNORECASE
+#     )
+#     return text
 
 def sort_priority(product):
 
@@ -233,15 +236,21 @@ def search():
     # remove extra spaces
     query = " ".join(query.split())
     # print(query)
-    query = re.sub(r'(\d+(?:\.\d+)?)([a-z]+)\b', r'\1 \2', query, flags=re.IGNORECASE)
-    # # print(query)
 
+    # query = separate_number_words(query)
+    #seperate number from letter immediately
+    query = re.sub(r'(\d+(?:\.\d+)?)([a-z]+)\b', r'\1 \2', query, flags=re.IGNORECASE)
+    # # # print(query)
+
+    #seperate m from numbers and from products like mm etc.
     query = re.sub(r'\bm(\d+(?:\s*[x\*]\s*\d+)?)', r'm \1', query, flags=re.IGNORECASE)
     # # print(query)
     # a"xb"
     parsed = parse_query(query)
+    # k = 0
     m_frac = re.search(r'(\d+(?:-\d+)?/\d+)"?\s*[xX\*]\s*(\d+(?:-\d+)?(?:/\d+)?)"?', query)
     if m_frac:
+        # k=1
         d1 = m_frac.group(1)
         d2 = m_frac.group(2)
         query = re.sub(r'(\d+(?:-\d+)?(?:/\d+)?)"?\s*[xX\*]\s*(\d+(?:-\d+)?(?:/\d+)?)"?',
@@ -251,6 +260,7 @@ def search():
     # axb, a x b, aXb, a*b and similar
     m = re.search(r'\b(\d+)\s*[xX\*]\s*(\d+)\b', query)
     if m:
+        # k=1
         d1 = m.group(1)
         d2 = m.group(2)
         query = re.sub(r'\b\d+\s*[xX\*]\s*\d+\b', f'{d1} length {d2} diameter', query)
@@ -281,6 +291,8 @@ def search():
                 'MaterialId': doc.get('materialId', ''),
                 'productSpecification': doc.get('productSpecification', ''),
                 'listPrice': doc.get('listPrice', ''),
+                'shortDescription': doc.get('shortDescription', ''),
+                'UOM': doc.get('UOM', ''),
                 'vendors': doc.get('vendors', []),
                 'ARCvendors': doc.get('ARCvendors', [])
             }]
@@ -379,6 +391,9 @@ def search():
             return jsonify(output)
 
     # expanded_queries = expand_query(clean_query)
+    # if k==0:
+    #     expanded_queries = expand_query(clean_query)
+    # else:
     expanded_queries = list(dict.fromkeys([q2] + expand_query(clean_query)))
 
     # expanded_queries.append(q2)
@@ -408,7 +423,10 @@ def search():
             filters.append(f'brandName:={brand}')
 
         for attr in attributes:
-            filters.append(f'productSpecification:{attr}')
+            if attr == "core":
+                filters.append("(productSpecification:core || productSpecification:cores)")
+            else:
+                filters.append(f"productSpecification:{attr}")
 
         if filters:
             search_parameters['filter_by'] = " && ".join(filters)
@@ -452,7 +470,7 @@ def search():
             # pprint.pp(doc)
     
     output.sort(key=sort_priority)        
-    output = output[:10]
+    # output = output[:10]
     return jsonify(output)
 
 if __name__ == "__main__":
