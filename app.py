@@ -7,28 +7,28 @@ from dotenv import load_dotenv
 load_dotenv()
 
 DOUBLE_SYNONYMS = {
-    "v belt": "v-belt",
-    "belt v": "v-belt",
     "t bolt": "t-bolt",
-    "u clamp": "u-clamp",
+    "u clamp": "u-clamp", 
     "o ring": "o-ring",
-    "hexagonal ": "hex ",
     "pliers" : "plier",
 }
 
 SINGLE_SYNONYMS = {
     "mm2" : "sqmm",
-    "mm2": "mm",
     "cores": "core",
     "cables":"cable",
     "SQ" : "sqmm",
-    "flex" : "flexible",
+    "flex " : "flexible ",
     "single" : "1",
     "one" : "1",
     "-" : " ",
     "screw driver": "screwdriver",
-    " zz ": "2z",
-    "core of cable":"number of cores"
+    "zz": "2 z",
+    "core of cable":"number of cores",
+    "cu":"copper",
+    "hexagonal ": "hex ",
+    "v belt": "v-belt",
+    "belt v": "v-belt",
 }
 
 def expand_query(q):
@@ -36,23 +36,23 @@ def expand_query(q):
     variants = [q]
 
     # pair
-    v1 = re.sub(r'(\d+)\s+pair\b', r'\1pair', q)
-    v2 = re.sub(r'(\d+)pair\b', r'\1 pair', q)
+    # v1 = re.sub(r'(\d+)\s+pair\b', r'\1pair', q)
+    # v2 = re.sub(r'(\d+)pair\b', r'\1 pair', q)
 
-    # traid
-    v3 = re.sub(r'(\d+)\s+traid\b', r'\1traid', q)
-    v4 = re.sub(r'(\d+)traid\b', r'\1 traid', q)
+    # # traid
+    # v3 = re.sub(r'(\d+)\s+traid\b', r'\1traid', q)
+    # v4 = re.sub(r'(\d+)traid\b', r'\1 traid', q)
 
     # a-56 -> a56
     v5 = re.sub(r'\b([a-ln-z]+)-(\d+)\b', r'\1\2', q)
 
     # # a-56 -> a 56
-    v6 = re.sub(r'\b([a-ln-z]]+)-(\d+)\b', r'\1 \2', q)
+    v6 = re.sub(r'\b([a-ln-z]+)-(\d+)\b', r'\1 \2', q)
 
     # a 56 -> a56
     # v7 = re.sub(r'\b([a-ln-z]+)\s+(\d+)\b', r'\1\2', q)
 
-    # # a 56 -> a-56
+    # # # a 56 -> a-56
     # v8 = re.sub(r'\b([a-ln-z]+)\s+(\d+)\b', r'\1-\2', q)
 
     # # a56 -> a 56
@@ -64,7 +64,7 @@ def expand_query(q):
     # m 14 -> 14
     v11 = re.sub(r'\bm\s+(\d+)\b', r'\1', q)
 
-    for v in [v1, v2, v3, v4, v5, v6, v9, v10, v11]: #, v6, v8, v9, v10
+    for v in [v5, v6, v9, v10, v11]: #, v6, v8, v9, v10
         if v not in variants:
             variants.append(v)
 
@@ -94,26 +94,26 @@ def expand_query(q):
 
     return variants
 
-# SEPARATE_NUMBER_WORDS = {
-#     "core", "sqmm", "sq", "mm", "mm2", "inch", "pin", "amp", "kv", "v", "w", "ltr", "kg", "gm", "m"}
+SEPARATE_NUMBER_WORDS = {
+    "core", "sqmm", "sq", "mm", "mm2", "inch", "pin", "amp", "kv", "v", "w", "ltr", "kg", "gm", "m"}
 
-# WORDS_PATTERN = "|".join(map(re.escape, SEPARATE_NUMBER_WORDS))
+WORDS_PATTERN = "|".join(map(re.escape, SEPARATE_NUMBER_WORDS))
 
-# def separate_number_words(text):
-#     text = re.sub(
-#         rf'(\d+(?:\.\d+)?)(?=({WORDS_PATTERN})\b)',
-#         r'\1 ',
-#         text,
-#         flags=re.IGNORECASE
-#     )
+def separate_number_words(text):
+    text = re.sub(
+        rf'(\d+(?:\.\d+)?)(?=({WORDS_PATTERN})\b)',
+        r'\1 ',
+        text,
+        flags=re.IGNORECASE
+    )
 
-#     text = re.sub(
-#         rf'\b({WORDS_PATTERN})(?=\d)',
-#         r'\1 ',
-#         text,
-#         flags=re.IGNORECASE
-#     )
-#     return text
+    text = re.sub(
+        rf'\b({WORDS_PATTERN})(?=\d)',
+        r'\1 ',
+        text,
+        flags=re.IGNORECASE
+    )
+    return text
 
 def sort_priority(product):
 
@@ -147,8 +147,6 @@ KNOWN_ATTRIBUTES = {
     str(x).strip().lower()
     for x in attributes_df.iloc[:, 0].dropna()
 }
-# print(f"Loaded {len(KNOWN_BRANDS)} brands")
-# print(f"Loaded {len(KNOWN_ATTRIBUTES)} attributes")
 
 def parse_query(query):
 
@@ -174,15 +172,6 @@ def parse_query(query):
             match.group(0),
             " "
         )
-    #     # NEW: auto detect alphanumeric tokens
-    # if model_number is None:
-    #     tokens = query_lower.split()
-
-    #     for token in tokens:
-    #         # ss304, b-130, a56, 6205zz, m12 etc.
-    #         if re.search(r'[a-z]', token) and re.search(r'\d', token):
-    #             model_number = token
-    #             break
 
     words = query_lower.split()
 
@@ -205,10 +194,6 @@ def parse_query(query):
         "query": " ".join(remaining)
     }
 
-#PART NO
-# print(os.getenv("TYPESENSE_HOST"))
-# print(os.getenv("TYPESENSE_API_KEY"))
-
 client = typesense.Client({
     'nodes': [{
         'host': os.getenv('TYPESENSE_HOST'),
@@ -228,43 +213,36 @@ def home():
 def search():
 
     query = request.args.get("q", "")
+    query = query.lower()
     q2 = query
     # print(query)
-    # treat commas as spaces
     query = query.replace(",", " ")
-    # print(query)
-    # remove extra spaces
+    query = query.replace("mm2", "sqmm")
+    query = query.replace("(", " ")
+    query = query.replace(")", " ")
+    query = query.replace(":", " ")
     query = " ".join(query.split())
-    # print(query)
-
-    # query = separate_number_words(query)
-    #seperate number from letter immediately
-    query = re.sub(r'(\d+(?:\.\d+)?)([a-z]+)\b', r'\1 \2', query, flags=re.IGNORECASE)
-    # # # print(query)
-
-    #seperate m from numbers and from products like mm etc.
-    query = re.sub(r'\bm(\d+(?:\s*[x\*]\s*\d+)?)', r'm \1', query, flags=re.IGNORECASE)
-    # # print(query)
-    # a"xb"
     parsed = parse_query(query)
-    # k = 0
+    query = separate_number_words(query)
+# print(query)
+    k = 0
+    # a"xb"
     m_frac = re.search(r'(\d+(?:-\d+)?/\d+)"?\s*[xX\*]\s*(\d+(?:-\d+)?(?:/\d+)?)"?', query)
     if m_frac:
-        # k=1
+        k=1
         d1 = m_frac.group(1)
         d2 = m_frac.group(2)
         query = re.sub(r'(\d+(?:-\d+)?(?:/\d+)?)"?\s*[xX\*]\s*(\d+(?:-\d+)?(?:/\d+)?)"?',
             f'{d1} inch diameter {d2} inch length', query)
-    # print(query)
 
     # axb, a x b, aXb, a*b and similar
     m = re.search(r'\b(\d+)\s*[xX\*]\s*(\d+)\b', query)
     if m:
-        # k=1
+        k=1
         d1 = m.group(1)
         d2 = m.group(2)
         query = re.sub(r'\b\d+\s*[xX\*]\s*\d+\b', f'{d1} length {d2} diameter', query)
-    # print(query)
+
     parsed1 = parse_query(query)
     material_id = parsed["material_id"]
     model_number = parsed['model_number']
@@ -279,7 +257,7 @@ def search():
     seen = set()
     if material_id:
         try:
-            doc = client.collections['product'].documents[
+            doc = client.collections['spec'].documents[
                 material_id
             ].retrieve()
 
@@ -306,7 +284,7 @@ def search():
     # ERP Code Priority Search
     # ----------------------------
     try:
-        erp_results = client.collections["product"].documents.search({
+        erp_results = client.collections["spec"].documents.search({
             "q": query,
             "query_by": "companyERPCodes",
             "filter_by": f"companyERPCodes:={query}",
@@ -351,7 +329,7 @@ def search():
     # ----------------------------
     if model_number:
 
-        results = client.collections['product'].documents.search({
+        results = client.collections['spec'].documents.search({
             'q': model_number,
             'query_by': 'productSpecification',
             'per_page': 20,
@@ -390,37 +368,41 @@ def search():
         if output:
             return jsonify(output)
 
-    # expanded_queries = expand_query(clean_query)
+    expanded_queries = expand_query(clean_query)
     # if k==0:
     #     expanded_queries = expand_query(clean_query)
     # else:
-    expanded_queries = list(dict.fromkeys([q2] + expand_query(clean_query)))
+    #     expanded_queries = list(dict.fromkeys([q2] + expand_query(clean_query)))
 
     # expanded_queries.append(q2)
 
     output = []
     seen = set()
+
+    # ----------------------------
+    # Search SPEC collection only
+    # ----------------------------
     for q in expanded_queries:
-        # print(q)
+        parsed2 = parse_query(q)
+        brand = parsed2["brand"]
+        attributes = parsed2["attributes"]
+
         search_parameters = {
-            'q': q,
-            'query_by': 'productName, variantName, productSpecification',
-            'query_by_weights': '3,2,1',
-            'per_page': 20,
-            'prioritize_num_matching_fields': True,
-            'sort_by': '_text_match:desc',
-            'include_fields':
-                'materialId, productName, brandName, variantName, categoryName,'
-                'productSpecification, listPrice, UOM, shortDescription, vendors, vendors.companyName,'
-                'vendors.contractPrice, vendors.discount, vendors.vrcListPrice,'
-                'vendors.leadTime, vendors.VRC, ARCvendors, ARCvendors.UnitPrice,'
-                'ARCvendors.branchName, ARCvendors.arcLeadTime, ARCvendors.arcLeadTime,'
-                'ARCvendors.validityPeriod, ARCvendors.companyName'
+            "q": q,
+            "query_by": "productName, variantName, productSpecification, productSpecification_normalized",
+            "query_by_weights": "4,3,2,1",
+            "per_page": 20,
+            "prioritize_num_matching_fields": True,
+            "sort_by": "_text_match:desc",
+            "include_fields": "materialId, productName, brandName, variantName, categoryName,"
+                            "productSpecification, listPrice, UOM, shortDescription,"
+                            "vendors, ARCvendors"
         }
+
         filters = []
-        
+
         if brand:
-            filters.append(f'brandName:={brand}')
+            filters.append(f"brandName:={brand}")
 
         for attr in attributes:
             if attr == "core":
@@ -429,48 +411,86 @@ def search():
                 filters.append(f"productSpecification:{attr}")
 
         if filters:
-            search_parameters['filter_by'] = " && ".join(filters)
+            search_parameters["filter_by"] = " && ".join(filters)
 
-        results = client.collections['product'].documents.search(
-            search_parameters
-        )
-        # print("Found:", results['found'])
-        # mat_ids = [
-        #     hit['document'].get('materialId')
-        #     for hit in results['hits']
-        # ]
+        results = client.collections["spec"].documents.search(search_parameters)
 
-        # print("Material IDs:", mat_ids)
+        for hit in results["hits"]:
 
-        for hit in results['hits']:
+            doc = hit["document"]
+            material_id = doc["materialId"]
 
-            doc = hit['document']
-            material_id = doc.get('materialId')
-
-            # remove duplicates
             if material_id in seen:
                 continue
 
             seen.add(material_id)
 
             output.append({
-                'productName': doc.get('productName', ''),
-                'brandName': doc.get('brandName', ''),
-                'variantName': doc.get('variantName', ''),
-                'categoryName': doc.get('categoryName', ''),
-                'MaterialId': material_id,
-                'productSpecification': doc.get('productSpecification', ''),
-                'listPrice': doc.get('listPrice', ''),
-                'shortDescription': doc.get('shortDescription', ''),
-                'UOM': doc.get('UOM', ''),
-                'vendors': doc.get('vendors', []),
-                'ARCvendors': doc.get('ARCvendors', []) 
+                "productName": doc.get("productName", ""),
+                "brandName": doc.get("brandName", ""),
+                "variantName": doc.get("variantName", ""),
+                "categoryName": doc.get("categoryName", ""),
+                "MaterialId": material_id,
+                "productSpecification": doc.get("productSpecification", ""),
+                "listPrice": doc.get("listPrice", ""),
+                "shortDescription": doc.get("shortDescription", ""),
+                "UOM": doc.get("UOM", ""),
+                "vendors": doc.get("vendors", []),
+                "ARCvendors": doc.get("ARCvendors", [])
             })
-            # import pprint
-            # pprint.pp(doc)
+    
+    if len(output) < 30:
+
+        remaining = 30 - len(output)
+
+        for q in expanded_queries:
+
+            temp_params = {
+                "q": q,
+                "query_by": "productName, variantName, productSpecification",
+                "query_by_weights": "3,2,1",
+                "per_page": remaining,
+                "prioritize_num_matching_fields": True,
+                "sort_by": "_text_match:desc",
+                "include_fields": "materialId, productName, brandName, variantName,"
+                                "categoryName, productSpecification, listPrice,"
+                                "UOM, shortDescription, vendors, ARCvendors"
+            }
+
+            temp_results = client.collections["line"].documents.search(temp_params)
+
+            for hit in temp_results["hits"]:
+
+                doc = hit["document"]
+                material_id = doc["materialId"]
+
+                if material_id in seen:
+                    continue
+
+                seen.add(material_id)
+
+                output.append({
+                    "productName": doc.get("productName", ""),
+                    "brandName": doc.get("brandName", ""),
+                    "variantName": doc.get("variantName", ""),
+                    "categoryName": doc.get("categoryName", ""),
+                    "MaterialId": material_id,
+                    "productSpecification": doc.get("productSpecification", ""),
+                    "listPrice": doc.get("listPrice", ""),
+                    "shortDescription": doc.get("shortDescription", ""),
+                    "UOM": doc.get("UOM", ""),
+                    "vendors": doc.get("vendors", []),
+                    "ARCvendors": doc.get("ARCvendors", [])
+                })
+
+                if len(output) == 30:
+                    break
+
+            if len(output) == 30:
+                break
     
     output.sort(key=sort_priority)        
-    # output = output[:10]
+    output = output[:30]
     return jsonify(output)
 
 if __name__ == "__main__":
