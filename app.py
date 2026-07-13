@@ -384,11 +384,11 @@ def search():
     # ----------------------------
     for q in expanded_queries:
         parsed2 = parse_query(q)
-        brand = parsed2["brand"]
+        q_brand = parsed2["brand"] or brand
         attributes = parsed2["attributes"]
-
+        search_q = q.strip() or "*"
         search_parameters = {
-            "q": q,
+            "q": search_q,
             "query_by": "productName, variantName, productSpecification, productSpecification_normalized",
             "query_by_weights": "4,3,2,1",
             "per_page": 20,
@@ -401,7 +401,7 @@ def search():
 
         filters = []
 
-        if brand:
+        if q_brand:
             filters.append(f"brandName:={brand}")
 
         for attr in attributes:
