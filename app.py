@@ -128,6 +128,36 @@ def sort_priority(product):
 
     return 2
 
+def attach_vmi_tags(output, client):
+    if not output:
+        return output
+
+    ids = list({str(o["MaterialId"]) for o in output if o.get("MaterialId")})
+    if not ids:
+        return output
+
+    try:
+        vmi_hits = client.collections["vmi_tags"].documents.search({
+            "q": "*",
+            "filter_by": f"materialId:=[{','.join(ids)}]",
+            "per_page": 250
+        })
+
+        vmi_map = {}
+        for hit in vmi_hits["hits"]:
+            doc = hit["document"]
+            vmi_map.setdefault(doc["materialId"], []).append(doc["linkedMaterialId"])
+
+        for o in output:
+            linked = vmi_map.get(o["MaterialId"])
+            if linked:
+                o["VMI"] = linked
+
+    except Exception:
+        pass
+
+    return output
+
 app = Flask(__name__)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -135,6 +165,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 brands_df = pd.read_excel(
     os.path.join(BASE_DIR, "data", "Brands.xlsx")
 )
+
 KNOWN_BRANDS = {
     str(x).strip().lower()
     for x in brands_df.iloc[:, 0].dropna()
@@ -153,12 +184,15 @@ def parse_query(query):
     query_lower = query.lower()
     
     material_id = None
+    temp_material_id = None
     model_number = None
 
-    if query_lower.isdigit(): 
-        num = int(query_lower) 
-        if 100000 <= num <= 800000: 
+    if query_lower.isdigit():
+        num = int(query_lower)
+        if 100000 <= num <= 800000:
             material_id = query_lower
+        if len(query_lower) == 7:
+            temp_material_id = query_lower
 
     match = re.search(
         r'\b(?:model\s*no\.?|model\s*number|model#)\s*([a-z0-9\-\/]+)',
@@ -168,10 +202,7 @@ def parse_query(query):
 
     if match:
         model_number = match.group(1).lower()
-        query_lower = query_lower.replace(
-            match.group(0),
-            " "
-        )
+        query_lower = query_lower.replace(match.group(0), " ")
 
     words = query_lower.split()
 
@@ -186,8 +217,10 @@ def parse_query(query):
             remaining.append(word)
             if word in KNOWN_ATTRIBUTES:
                 attributes.append(word)
+
     return {
         "material_id": material_id,
+        "temp_material_id": temp_material_id,   # new
         "model_number": model_number,
         "brand": brand,
         "attributes": attributes,
@@ -245,11 +278,11 @@ def search():
 
     parsed1 = parse_query(query)
     material_id = parsed["material_id"]
+    temp_material_id = parsed.get("temp_material_id")
     model_number = parsed['model_number']
     brand = parsed['brand']
     attributes = parsed['attributes']
     clean_query = parsed1['query']
-
     # ----------------------------
     # Material Id Priority Search
     # ----------------------------
@@ -257,11 +290,8 @@ def search():
     seen = set()
     if material_id:
         try:
-            doc = client.collections['spec'].documents[
-                material_id
-            ].retrieve()
-
-            output = [{
+            doc = client.collections['spec'].documents[material_id].retrieve()
+            output.append({
                 'productName': doc.get('productName', ''),
                 'brandName': doc.get('brandName', ''),
                 'variantName': doc.get('variantName', ''),
@@ -272,14 +302,36 @@ def search():
                 'shortDescription': doc.get('shortDescription', ''),
                 'UOM': doc.get('UOM', ''),
                 'vendors': doc.get('vendors', []),
-                'ARCvendors': doc.get('ARCvendors', [])
-            }]
-
+                'ARCvendors': doc.get('ARCvendors', []),
+                'isTemporary': doc.get('isTemporary', 'false')
+            })
             seen.add(int(material_id))
-
         except typesense.exceptions.ObjectNotFound:
             pass
 
+    # ----------------------------
+    # Temporary Material Id Priority Search
+    # ----------------------------
+    if temp_material_id:
+        try:
+            doc = client.collections['temp'].documents[temp_material_id].retrieve()
+            output.append({
+                'productName': doc.get('productName', ''),
+                'brandName': doc.get('brandName', ''),
+                'variantName': doc.get('variantName', ''),
+                'categoryName': doc.get('categoryName', ''),
+                'MaterialId': doc.get('materialId', ''),
+                'productSpecification': doc.get('productSpecification', ''),
+                'listPrice': doc.get('listPrice', ''),
+                'shortDescription': doc.get('shortDescription', ''),
+                'UOM': doc.get('UOM', ''),
+                'vendors': [],
+                'ARCvendors': doc.get('ARCvendors', []),
+                'isTemporary': doc.get('isTemporary', 'true')
+            })
+            seen.add(int(temp_material_id))
+        except typesense.exceptions.ObjectNotFound:
+            pass
     # ----------------------------
     # ERP Code Priority Search
     # ----------------------------
@@ -292,16 +344,11 @@ def search():
         })
 
         for hit in erp_results["hits"]:
-
             doc = hit["document"]
-
-            material_id = doc["materialId"]
-
-            if material_id in seen:
+            mid = doc["materialId"]
+            if mid in seen:
                 continue
-
-            seen.add(material_id)
-
+            seen.add(mid)
             output.append({
                 'productName': doc.get('productName', ''),
                 'brandName': doc.get('brandName', ''),
@@ -313,16 +360,47 @@ def search():
                 'shortDescription': doc.get('shortDescription', ''),
                 'UOM': doc.get('UOM', ''),
                 'vendors': doc.get('vendors', []),
-                'ARCvendors': doc.get('ARCvendors', [])
+                'ARCvendors': doc.get('ARCvendors', []),
+                'isTemporary': 'false'
             })
-
-        output.sort(key=sort_priority)
-
-        if output:
-            return jsonify(output)
-
     except Exception:
         pass
+
+    # new: same ERP lookup against temp collection
+    try:
+        temp_erp_results = client.collections["temp"].documents.search({
+            "q": query,
+            "query_by": "companyERPCodes",
+            "filter_by": f"companyERPCodes:={query}",
+            "per_page": 20
+        })
+
+        for hit in temp_erp_results["hits"]:
+            doc = hit["document"]
+            mid = doc["materialId"]
+            if mid in seen:
+                continue
+            seen.add(mid)
+            output.append({
+                'productName': doc.get('productName', ''),
+                'brandName': doc.get('brandName', ''),
+                'variantName': doc.get('variantName', ''),
+                'categoryName': doc.get('categoryName', ''),
+                'MaterialId': doc.get('materialId', ''),
+                'productSpecification': doc.get('productSpecification', ''),
+                'listPrice': doc.get('listPrice', ''),
+                'shortDescription': doc.get('shortDescription', ''),
+                'UOM': doc.get('UOM', ''),
+                'vendors': [],
+                'ARCvendors': doc.get('ARCvendors', []),
+                'isTemporary': 'true'
+            })
+    except Exception:
+        pass
+
+    output.sort(key=sort_priority)
+    if output:
+        return jsonify(attach_vmi_tags(output, client))
     
     # ----------------------------
     # Model Number Priority Search
@@ -366,7 +444,7 @@ def search():
         output.sort(key=sort_priority)
 
         if output:
-            return jsonify(output)
+            return jsonify(attach_vmi_tags(output, client))
 
     expanded_queries = expand_query(clean_query)
     # if k==0:
@@ -378,11 +456,11 @@ def search():
 
     output = []
     seen = set()
-
     # ----------------------------
     # Search SPEC collection only
     # ----------------------------
     for q in expanded_queries:
+        print(q)
         parsed2 = parse_query(q)
         q_brand = parsed2["brand"] or brand
         attributes = parsed2["attributes"]
@@ -391,7 +469,7 @@ def search():
             "q": search_q,
             "query_by": "productName, variantName, productSpecification, productSpecification_normalized",
             "query_by_weights": "4,3,2,1",
-            "per_page": 20,
+            "per_page": 30,
             "prioritize_num_matching_fields": True,
             "sort_by": "_text_match:desc",
             "include_fields": "materialId, productName, brandName, variantName, categoryName,"
@@ -447,17 +525,17 @@ def search():
 
             temp_params = {
                 "q": q,
-                "query_by": "productName, variantName, productSpecification",
-                "query_by_weights": "3,2,1",
+                "query_by": "productName, variantName, productSpecification, productSpecification_normalized",
+                "query_by_weights": "4,3,2,1",
                 "per_page": remaining,
                 "prioritize_num_matching_fields": True,
                 "sort_by": "_text_match:desc",
                 "include_fields": "materialId, productName, brandName, variantName,"
                                 "categoryName, productSpecification, listPrice,"
-                                "UOM, shortDescription, vendors, ARCvendors"
+                                "UOM, shortDescription, ARCvendors, isTemporary"
             }
 
-            temp_results = client.collections["line"].documents.search(temp_params)
+            temp_results = client.collections["temp"].documents.search(temp_params)
 
             for hit in temp_results["hits"]:
 
@@ -479,8 +557,9 @@ def search():
                     "listPrice": doc.get("listPrice", ""),
                     "shortDescription": doc.get("shortDescription", ""),
                     "UOM": doc.get("UOM", ""),
-                    "vendors": doc.get("vendors", []),
-                    "ARCvendors": doc.get("ARCvendors", [])
+                    "vendors": [],
+                    "ARCvendors": doc.get("ARCvendors", []),
+                    "isTemporary": doc.get("isTemporary", "true")
                 })
 
                 if len(output) == 30:
@@ -491,7 +570,7 @@ def search():
     
     output.sort(key=sort_priority)        
     output = output[:30]
-    return jsonify(output)
+    return jsonify(attach_vmi_tags(output, client))
 
 if __name__ == "__main__":
     app.run(debug=True)

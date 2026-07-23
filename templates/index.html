@@ -183,11 +183,16 @@ function renderPage() {
 
         const hasARC = arcVendors.length > 0;
         const hasVRC = vrcVendors.length > 0;
+        const vmiLinkedIds = Array.isArray(product.VMI) ? product.VMI : [];
+        const hasVMI = vmiLinkedIds.length > 0;
 
         resultsDiv.innerHTML += `
             <div class="card">
                 <div style="display:flex;justify-content:space-between;align-items:center;">
-                    <h3 style="margin:0;">${product.productName}</h3>
+                    <h3 style="margin:0;">
+                        ${product.productName}
+                        ${hasVMI ? `<span class="vrc-tag" style="background:#9333ea;margin-left:8px;">VMI: ${vmiLinkedIds.join(', ')}</span>` : ''}
+                    </h3>
                     <div style="display:flex;gap:8px;">
                         ${hasARC ? '<span class="vrc-tag" style="background:#2563eb;">ARC</span>' : ''}
                         ${hasVRC ? '<span class="vrc-tag">VRC</span>' : ''}
