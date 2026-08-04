@@ -115,18 +115,39 @@ def separate_number_words(text):
     )
     return text
 
-def sort_priority(product):
+def is_temporary(product):
+    val = product.get("isTemporary", False)
+    if isinstance(val, str):
+        return val.strip().lower() in ("true", "1", "yes")
+    return bool(val)
 
-    has_arc = len(product.get("ARCvendors", [])) > 0
+def sort_priority(product):
     has_vrc = len(product.get("vendors", [])) > 0
+    has_arc = len(product.get("ARCvendors", [])) > 0
 
     if has_vrc:
-        return 0
+        vendor_rank = 0
+    elif has_arc:
+        vendor_rank = 1
+    else:
+        vendor_rank = 2
 
-    if has_arc:
-        return 1
+    # 0 = permanent, 1 = temporary  -> permanent block always comes first
+    return (1 if is_temporary(product) else 0, vendor_rank)
 
-    return 2
+def erp_sort_priority(product):
+    has_vrc = len(product.get("vendors", [])) > 0
+    has_arc = len(product.get("ARCvendors", [])) > 0
+
+    if has_vrc:
+        vendor_rank = 0
+    elif has_arc:
+        vendor_rank = 1
+    else:
+        vendor_rank = 2
+
+    # vendor tier leads; permanent wins the tie within a tier
+    return (vendor_rank, 1 if is_temporary(product) else 0)
 
 def attach_vmi_tags(output, client):
     if not output:
@@ -254,6 +275,7 @@ def search():
     query = query.replace("(", " ")
     query = query.replace(")", " ")
     query = query.replace(":", " ")
+    query = re.sub(r'\bbrands?\b', ' ', query)
     query = " ".join(query.split())
     parsed = parse_query(query)
     query = separate_number_words(query)
@@ -398,7 +420,7 @@ def search():
     except Exception:
         pass
 
-    output.sort(key=sort_priority)
+    output.sort(key=erp_sort_priority)
     if output:
         return jsonify(attach_vmi_tags(output, client))
     
