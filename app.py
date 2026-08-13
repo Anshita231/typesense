@@ -21,7 +21,7 @@ SINGLE_SYNONYMS = {
     "flex " : "flexible ",
     "single" : "1",
     "one" : "1",
-    "-" : " ",
+    "-": " ",
     "screw driver": "screwdriver",
     "zz": "2 z",
     "core of cable":"number of cores",
@@ -206,7 +206,7 @@ def parse_query(query):
     
     material_id = None
     temp_material_id = None
-    model_number = None
+    identifier_number = None
 
     if query_lower.isdigit():
         num = int(query_lower)
@@ -215,15 +215,25 @@ def parse_query(query):
         if len(query_lower) == 7:
             temp_material_id = query_lower
 
-    match = re.search(
-        r'\b(?:model\s*no\.?|model\s*number|model#)\s*([a-z0-9\-\/]+)',
+    identifier_match = re.search(
+        r'\b(?:'
+        r'model\s*(?:no\.?|number)?|'
+        r'part\s*(?:no\.?|number)?|'
+        r'product\s*(?:no\.?|number|code)?|'
+        r'p\.\s*no\.?|'
+        r'pn\.?|'
+        r'item\s*code|'
+        r'code|'
+        r'no \.?|'
+        r'number'
+        r')\s*[:#-]?\s*([a-z0-9\-\/]+)',
         query_lower,
         flags=re.IGNORECASE
     )
 
-    if match:
-        model_number = match.group(1).lower()
-        query_lower = query_lower.replace(match.group(0), " ")
+    if identifier_match:
+        identifier_number = identifier_match.group(1).lower()
+        query_lower = query_lower.replace(identifier_match.group(0), " ")
 
     words = query_lower.split()
 
@@ -242,7 +252,7 @@ def parse_query(query):
     return {
         "material_id": material_id,
         "temp_material_id": temp_material_id,   # new
-        "model_number": model_number,
+        "identifier_number": identifier_number,
         "brand": brand,
         "attributes": attributes,
         "query": " ".join(remaining)
@@ -265,7 +275,6 @@ def home():
 @app.route("/search")
 
 def search():
-
     query = request.args.get("q", "")
     query = query.lower()
     q2 = query
@@ -279,7 +288,7 @@ def search():
     query = " ".join(query.split())
     parsed = parse_query(query)
     query = separate_number_words(query)
-# print(query)
+    
     k = 0
     # a"xb"
     m_frac = re.search(r'(\d+(?:-\d+)?/\d+)"?\s*[xX\*]\s*(\d+(?:-\d+)?(?:/\d+)?)"?', query)
@@ -301,7 +310,7 @@ def search():
     parsed1 = parse_query(query)
     material_id = parsed["material_id"]
     temp_material_id = parsed.get("temp_material_id")
-    model_number = parsed['model_number']
+    identifier_number = parsed['identifier_number']
     brand = parsed['brand']
     attributes = parsed['attributes']
     clean_query = parsed1['query']
@@ -427,47 +436,59 @@ def search():
     # ----------------------------
     # Model Number Priority Search
     # ----------------------------
-    if model_number:
-
-        results = client.collections['spec'].documents.search({
-            'q': model_number,
-            'query_by': 'productSpecification',
-            'per_page': 20,
-            'sort_by': '_text_match:desc',
-            'include_fields':
-                'materialId, productName, brandName, variantName, categoryName,'
-                'productSpecification, listPrice, UOM, shortDescription, vendors, vendors.companyName,'
-                'vendors.contractPrice, vendors.vrcListPrice,'
-                'vendors.leadTime, vendors.VRC, ARCvendors, ARCvendors.UnitPrice,'
-                'ARCvendors.branchName, ARCvendors.arcLeadTime, ARCvendors.arcLeadTime,'
-                'ARCvendors.validityPeriod, ARCvendors.companyName'
-        })
-
-        output = []
-
-        for hit in results['hits']:
-
-            doc = hit['document']
-
-            output.append({
-                'productName': doc.get('productName', ''),
-                'brandName': doc.get('brandName', ''),
-                'variantName': doc.get('variantName', ''),
-                'categoryName': doc.get('categoryName', ''),
-                'MaterialId': doc.get('materialId', ''),
-                'productSpecification': doc.get('productSpecification', ''),
-                'listPrice': doc.get('listPrice', ''),
-                'shortDescription': doc.get('shortDescription', ''),
-                'UOM': doc.get('UOM', ''),
-                'vendors': doc.get('vendors', []),
-                'ARCvendors': doc.get('ARCvendors', [])
+    output_model = []
+    seen_model = set()
+    if identifier_number:
+        model_queries = []
+        if identifier_number:
+            model_queries = [
+                f"model no {identifier_number}",
+                f"part no {identifier_number}",
+                identifier_number
+            ]
+            
+        for q in model_queries:
+            results = client.collections['spec'].documents.search({
+                'q': q,
+                'query_by': 'productSpecification',
+                'per_page': 20,
+                'sort_by': '_text_match:desc',
+                'include_fields':
+                    'materialId, productName, brandName, variantName, categoryName,'
+                    'productSpecification, listPrice, UOM, shortDescription, vendors, vendors.companyName,'
+                    'vendors.contractPrice, vendors.vrcListPrice,'
+                    'vendors.leadTime, vendors.VRC, ARCvendors, ARCvendors.UnitPrice,'
+                    'ARCvendors.branchName, ARCvendors.arcLeadTime, ARCvendors.arcLeadTime,'
+                    'ARCvendors.validityPeriod, ARCvendors.companyName'
             })
 
-        output.sort(key=sort_priority)
+            for hit in results['hits']:
 
-        if output:
-            return jsonify(attach_vmi_tags(output, client))
+                doc = hit['document']
+                if doc["materialId"] in seen_model:
+                    continue
 
+                seen_model.add(doc["materialId"])
+
+                output_model.append({
+                    'productName': doc.get('productName', ''),
+                    'brandName': doc.get('brandName', ''),
+                    'variantName': doc.get('variantName', ''),
+                    'categoryName': doc.get('categoryName', ''),
+                    'MaterialId': doc.get('materialId', ''),
+                    'productSpecification': doc.get('productSpecification', ''),
+                    'listPrice': doc.get('listPrice', ''),
+                    'shortDescription': doc.get('shortDescription', ''),
+                    'UOM': doc.get('UOM', ''),
+                    'vendors': doc.get('vendors', []),
+                    'ARCvendors': doc.get('ARCvendors', [])
+                })
+
+        output_model.sort(key=sort_priority)
+
+        if output_model:
+            return jsonify(attach_vmi_tags(output_model, client))
+    
     expanded_queries = expand_query(clean_query)
     # if k==0:
     #     expanded_queries = expand_query(clean_query)
@@ -475,9 +496,9 @@ def search():
     #     expanded_queries = list(dict.fromkeys([q2] + expand_query(clean_query)))
 
     # expanded_queries.append(q2)
-
     output = []
     seen = set()
+
     # ----------------------------
     # Search SPEC collection only
     # ----------------------------
@@ -489,9 +510,9 @@ def search():
         search_q = q.strip() or "*"
         search_parameters = {
             "q": search_q,
-            "query_by": "productName, variantName, productSpecification, productSpecification_normalized",
+            "query_by": "productName, variantName, productSpecification_normalized, productSpecification",
             "query_by_weights": "4,3,2,1",
-            "per_page": 30,
+            "per_page": 100,
             "prioritize_num_matching_fields": True,
             "sort_by": "_text_match:desc",
             "include_fields": "materialId, productName, brandName, variantName, categoryName,"
@@ -502,7 +523,7 @@ def search():
         filters = []
 
         if q_brand:
-            filters.append(f"brandName:={brand}")
+            filters.append(f"brandName:={q_brand}")
 
         for attr in attributes:
             if attr == "core":
@@ -514,12 +535,12 @@ def search():
             search_parameters["filter_by"] = " && ".join(filters)
 
         results = client.collections["spec"].documents.search(search_parameters)
-
+        
         for hit in results["hits"]:
 
             doc = hit["document"]
             material_id = doc["materialId"]
-
+            
             if material_id in seen:
                 continue
 
@@ -536,7 +557,7 @@ def search():
                 "shortDescription": doc.get("shortDescription", ""),
                 "UOM": doc.get("UOM", ""),
                 "vendors": doc.get("vendors", []),
-                "ARCvendors": doc.get("ARCvendors", [])
+                "ARCvendors": doc.get("ARCvendors", []),
             })
     
     if len(output) < 30:
