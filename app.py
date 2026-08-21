@@ -510,7 +510,7 @@ def search():
         search_q = q.strip() or "*"
         search_parameters = {
             "q": search_q,
-            "query_by": "productName, variantName, productSpecification_normalized, productSpecification",
+            "query_by": "productName, variantName, productSpecification, productSpecification_normalized",
             "query_by_weights": "4,3,2,1",
             "per_page": 100,
             "prioritize_num_matching_fields": True,
