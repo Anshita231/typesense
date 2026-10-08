@@ -20,10 +20,12 @@ import psycopg2
 import pandas as pd
 import warnings
 import typesense
+from dotenv import load_dotenv
 
 import attribute_matching
 
 warnings.filterwarnings("ignore", category=UserWarning)
+load_dotenv()
 
 # ---------------------------------------------------------------------------
 # CONFIG  — the only things you might ever touch
@@ -40,16 +42,27 @@ USE_DATED_FILENAMES = True
 # If dated files are kept, delete ones older than this many days (0 = keep forever)
 RETENTION_DAYS = 5
 
-# Credentials: prefer environment variables, fall back to inline values.
-# (Fill the fallbacks in, OR set the env vars in the .bat file.)
-TYPESENSE_HOST    = os.environ.get("TYPESENSE_HOST", "")
-TYPESENSE_API_KEY = os.environ.get("TYPESENSE_API_KEY", "")   # <-- put your key here or in the .bat
+# Credentials: read from .env (via load_dotenv() above) / real env vars.
+def _require_env(name):
+    val = os.environ.get(name)
+    if not val:
+        raise RuntimeError(
+            f"Required env var {name} is missing or empty. Check that your "
+            f".env file is at {os.path.dirname(os.path.abspath(__file__))} "
+            f"(load_dotenv() only looks next to the script, or in the "
+            f"current working directory if run from elsewhere) and that "
+            f"{name} is spelled exactly as above with a value after '='."
+        )
+    return val
 
-PG_HOST     = os.environ.get("PG_HOST", "")
-PG_DATABASE = os.environ.get("PG_DATABASE", "")
-PG_USER     = os.environ.get("PG_USER", "")
-PG_PASSWORD = os.environ.get("PG_PASSWORD", "")        # <-- put your password here or in the .bat
-PG_PORT     = int(os.environ.get("PG_PORT", ""))
+TYPESENSE_HOST    = _require_env("TYPESENSE_HOST")
+TYPESENSE_API_KEY = _require_env("TYPESENSE_API_KEY")
+
+PG_HOST     = _require_env("PG_HOST")
+PG_DATABASE = _require_env("PG_DATABASE")
+PG_USER     = _require_env("PG_USER")
+PG_PASSWORD = _require_env("PG_PASSWORD")
+PG_PORT     = int(_require_env("PG_PORT"))
 
 # ---------------------------------------------------------------------------
 # Filename helper — this is the piece that solves the "change name daily" problem
@@ -583,6 +596,7 @@ def run_main(conn, client):
                     "productDescription": row.get("productDescription"),
                     "productSpecification_normalized": normalize_productSpecification(row.get("productSpecification", "")),
                     "shortDescription": row.get("shortDescription"), "listPrice": row.get("listPrice"),
+                    "UOM": row.get("UOM"),
                     "companyERPCodes": [], "vendors": [], "ARCvendors": []
                 }
                 # productSpecificationJSON is kept OUT of the doc that gets

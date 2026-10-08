@@ -643,40 +643,49 @@ def search():
             if matched_material_ids:
                 id_filter = "materialId:=[" + ",".join(matched_material_ids) + "]"
 
+                def _attr_text_ranked_search(filter_by):
+                    best = {}
+                    for q_variant in attr_query_variants:
+                        for collection_name, is_temp in (("spec", False), ("temp", True)):
+                            try:
+                                text_ranked = client.collections[collection_name].documents.search({
+                                    "q": q_variant.strip() or "*",
+                                    "query_by": "productName, variantName, productSpecification, productSpecification_normalized",
+                                    "query_by_weights": "4,3,2,1",
+                                    "filter_by": filter_by,
+                                    "per_page": 20,
+                                    "prioritize_num_matching_fields": True,
+                                    "sort_by": "_text_match:desc",
+                                    "include_fields":
+                                        "materialId, productName, brandName, variantName, categoryName,"
+                                        "productSpecification, listPrice, UOM, shortDescription, vendors, ARCvendors"
+                                })
+                            except Exception as e:
+                                print(f"[attribute matching] step-2 search failed for variant {q_variant!r} on {collection_name}: {e}")
+                                continue
+
+                            for hit in text_ranked.get("hits", []):
+                                doc = hit["document"]
+                                mid = doc.get("materialId")
+                                if mid is None:
+                                    continue
+
+                                variant_words = [w for w in q_variant.lower().split() if len(w) > 1 and w.isalpha()]
+                                haystack = (str(doc.get('productName', '')) + ' ' + str(doc.get('productSpecification', ''))).lower()
+                                if variant_words and not all(w in haystack for w in variant_words):
+                                    continue
+
+                                score = hit.get("text_match", 0)
+                                if mid not in best or score > best[mid][0]:
+                                    best[mid] = (score, doc, is_temp)
+                    return best
+
                 attr_best = {}
-                for q_variant in attr_query_variants:
-                    for collection_name, is_temp in (("spec", False), ("temp", True)):
-                        try:
-                            text_ranked = client.collections[collection_name].documents.search({
-                                "q": q_variant.strip() or "*",
-                                "query_by": "productName, variantName, productSpecification, productSpecification_normalized",
-                                "query_by_weights": "4,3,2,1",
-                                "filter_by": id_filter,
-                                "per_page": 20,
-                                "prioritize_num_matching_fields": True,
-                                "sort_by": "_text_match:desc",
-                                "include_fields":
-                                    "materialId, productName, brandName, variantName, categoryName,"
-                                    "productSpecification, listPrice, UOM, shortDescription, vendors, ARCvendors"
-                            })
-                        except Exception as e:
-                            print(f"[attribute matching] step-2 search failed for variant {q_variant!r} on {collection_name}: {e}")
-                            continue
+                if brand:
+                    attr_best = _attr_text_ranked_search(f"{id_filter} && brandName:={brand}")
 
-                        for hit in text_ranked.get("hits", []):
-                            doc = hit["document"]
-                            mid = doc.get("materialId")
-                            if mid is None:
-                                continue
-
-                            variant_words = [w for w in q_variant.lower().split() if len(w) > 1 and w.isalpha()]
-                            haystack = (str(doc.get('productName', '')) + ' ' + str(doc.get('productSpecification', ''))).lower()
-                            if variant_words and not all(w in haystack for w in variant_words):
-                                continue
-
-                            score = hit.get("text_match", 0)
-                            if mid not in attr_best or score > attr_best[mid][0]:
-                                attr_best[mid] = (score, doc, is_temp)
+                if not attr_best:
+                    attr_best = _attr_text_ranked_search(id_filter)
 
                 for mid, (score, doc, is_temp) in sorted(attr_best.items(), key=lambda kv: kv[1][0], reverse=True):
                     attribute_results.append({
